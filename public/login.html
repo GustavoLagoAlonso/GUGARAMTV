@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GUGARAM TV Free — Entrar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <div class="tuner-strip"></div>
+  <div class="login-shell">
+    <div class="login-card">
+      <div class="login-brand">
+        <span class="dot"></span>
+        <h1>GUGARAM TV Free</h1>
+        <span>ENTRAR NA SUA CONTA</span>
+      </div>
+
+      <form id="loginForm" autocomplete="on">
+        <div class="field">
+          <label for="email">E-mail</label>
+          <input type="email" id="email" name="email" required autocomplete="username">
+        </div>
+        <div class="field">
+          <label for="password">Senha</label>
+          <input type="password" id="password" name="password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn block" id="submitBtn">Entrar</button>
+        <div class="login-error" id="loginError"></div>
+      </form>
+
+      <div class="login-support">
+        Problemas para entrar? <a href="#" id="supportLink">fale com o suporte</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  const form = document.getElementById("loginForm");
+  const errorEl = document.getElementById("loginError");
+  const submitBtn = document.getElementById("submitBtn");
+  const supportLink = document.getElementById("supportLink");
+
+  // Se já existe sessão válida, pula direto para o player.
+  fetch("/api/auth/session", { credentials: "same-origin" })
+    .then(function(r){ return r.json(); })
+    .then(function(data){ if(data.authenticated) window.location.href = "/app"; })
+    .catch(function(){ /* silencioso — usuário simplesmente vê a tela de login */ });
+
+  fetch("/api/config").then(r=>r.json()).then(function(cfg){
+    supportLink.href = "mailto:" + (cfg.supportEmail || "gugaram@gmail.com");
+    supportLink.textContent = "fale com o suporte";
+  }).catch(function(){});
+
+  form.addEventListener("submit", function(e){
+    e.preventDefault();
+    errorEl.textContent = "";
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Entrando...";
+
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value;
+
+    fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ email, password })
+    })
+      .then(function(res){ return res.json().then(function(data){ return { ok: res.ok, data: data }; }); })
+      .then(function(result){
+        if(!result.ok){
+          errorEl.textContent = result.data.message || "Não foi possível entrar. Tente novamente.";
+          submitBtn.disabled = false;
+          submitBtn.textContent = "Entrar";
+          return;
+        }
+        window.location.href = "/app";
+      })
+      .catch(function(){
+        errorEl.textContent = "Não foi possível conectar ao servidor. Tente novamente mais tarde.";
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Entrar";
+      });
+  });
+})();
+</script>
+</body>
+</html>

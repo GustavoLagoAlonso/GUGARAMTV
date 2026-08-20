@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GUGARAM TV Free</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.5.13/hls.min.js"></script>
+</head>
+<body>
+
+<!-- Tela de carregamento inicial (login já validado no servidor) -->
+<div class="app" id="loadingShell">
+  <div class="tuner-strip"></div>
+  <div class="loading-shell">
+    <div class="spin"></div>
+    <h2>GUGARAM TV Free</h2>
+    <p id="loadingText">Carregando canais...</p>
+  </div>
+</div>
+
+<!-- Aplicação principal (fica oculta até a playlist carregar) -->
+<div class="app" id="mainShell" style="display:none;">
+  <div class="tuner-strip"></div>
+
+  <header class="top">
+    <div class="top-inner">
+      <div class="brand">
+        <span class="dot"></span>
+        <h1>GUGARAM TV Free</h1>
+        <span class="sub" id="userBadge">&nbsp;</span>
+      </div>
+      <nav class="tabs">
+        <button data-tab="all" class="active">🏠 Início</button>
+        <button data-tab="favorites">⭐ Favoritos</button>
+        <button data-tab="categories">☰ Categorias</button>
+      </nav>
+      <button class="icon-btn" id="settingsBtn" title="Configurações" aria-label="Configurações">⚙</button>
+    </div>
+  </header>
+
+  <main>
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      <section class="card">
+        <div class="stats-row" id="statsRow">
+          <div class="stat"><div class="n" id="statChannels">0</div><div class="l">Canais</div></div>
+          <div class="stat"><div class="n" id="statCats">0</div><div class="l">Categorias</div></div>
+          <div class="stat"><div class="n" id="statFavs">0</div><div class="l">Favoritos</div></div>
+          <div class="stat"><div class="n" id="statCurrent">—</div><div class="l">Canal atual</div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="player-wrap">
+          <video id="video" playsinline controls></video>
+          <div class="player-overlay" id="playerOverlay">
+            <div class="glyph">▣</div>
+            <div>Selecione um canal para iniciar</div>
+          </div>
+        </div>
+        <div class="now-playing" id="nowPlaying">
+          <div class="meta">
+            <h2 id="npName">Nenhum canal selecionado</h2>
+            <div class="grp"><span id="npGroup">—</span> <span class="live-tag" id="liveTag">● AO VIVO</span></div>
+          </div>
+          <button class="fav-toggle" id="npFav" disabled>☆ Favoritar</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="card" style="display:flex;flex-direction:column;">
+      <div class="side-head">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="Pesquisar canais...">
+        </div>
+        <div class="filter-row">
+          <select id="sortSelect">
+            <option value="original">Ordem original</option>
+            <option value="az">Nome A–Z</option>
+            <option value="za">Nome Z–A</option>
+            <option value="favFirst">Favoritos primeiro</option>
+          </select>
+        </div>
+        <div class="cat-chips" id="catChips"></div>
+      </div>
+      <div class="channel-list" id="channelList">
+        <div class="empty-note">Nenhum canal disponível no momento.</div>
+      </div>
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    f = favoritar · / = pesquisar · ↑↓ = navegar · enter = play
+  </footer>
+</div>
+
+<!-- Tela de erro (playlist indisponível) -->
+<div class="app" id="errorShell" style="display:none;">
+  <div class="tuner-strip"></div>
+  <div class="loading-shell">
+    <div class="glyph" style="font-size:28px;color:var(--live);">⚠</div>
+    <h2>Não foi possível carregar os canais</h2>
+    <p id="errorText">Tente novamente mais tarde.</p>
+    <div style="display:flex;gap:8px;margin-top:6px;">
+      <button class="btn" id="retryBtn">Tentar novamente</button>
+      <button class="btn ghost" id="logoutFromErrorBtn">Sair</button>
+    </div>
+  </div>
+</div>
+
+<!-- Configurações -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h3>Configurações</h3>
+
+    <div class="field-group">
+      <label>Player</label>
+      <div class="toggle-row"><span>Autoplay ao selecionar canal</span><div class="switch" id="toggleAutoplay"></div></div>
+      <div class="toggle-row"><span>Continuar último canal</span><div class="switch" id="toggleResume"></div></div>
+    </div>
+
+    <div class="field-group">
+      <label>Interface</label>
+      <div class="toggle-row"><span>Mostrar logos</span><div class="switch" id="toggleLogos"></div></div>
+      <div class="toggle-row"><span>Mostrar categorias</span><div class="switch" id="toggleCats"></div></div>
+    </div>
+
+    <div class="field-group">
+      <label>Conta</label>
+      <div class="account-row"><span>Logado como</span><span class="email" id="accountEmail">—</span></div>
+      <button class="btn ghost" id="showChangePassBtn" style="width:100%;margin-top:8px;">Alterar senha</button>
+      <div class="inline-form" id="changePassForm" style="display:none;">
+        <input type="password" id="currentPassword" placeholder="Senha atual">
+        <input type="password" id="newPassword" placeholder="Nova senha (mín. 8 caracteres)">
+        <div class="field-error" id="changePassError"></div>
+        <button class="btn" id="submitChangePassBtn">Salvar nova senha</button>
+      </div>
+      <button class="btn danger" id="logoutBtn" style="width:100%;margin-top:10px;">Sair</button>
+    </div>
+
+    <div class="field-group">
+      <label>Favoritos</label>
+      <button class="btn danger" id="clearFavsBtn" style="width:100%;">Limpar favoritos</button>
+    </div>
+
+    <div class="field-group">
+      <label>Suporte</label>
+      <div style="font-size:12px;color:var(--text-dim);">
+        Em caso de problemas: <a href="#" id="supportEmailLink" style="color:var(--text-dim);">suporte</a>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn ghost" id="closeModalBtn">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "name": "gugaram-tv-free",
+  "version": "2.0.0",
+  "description": "GUGARAM TV Free — IPTV player com login e playlist privada no backend.",
+  "main": "server/server.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server/server.js",
+    "dev": "node --watch server/server.js",
+    "seed": "node server/scripts/seed-user.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0"
+  }
+}

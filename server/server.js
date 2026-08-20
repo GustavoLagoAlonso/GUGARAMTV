@@ -13,6 +13,8 @@ const requireAuth = require("./middleware/requireAuth");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.set("trust proxy", 1);
+
 if (!process.env.SESSION_SECRET) {
   console.warn(
     "[AVISO] SESSION_SECRET não definido no .env — usando um valor temporário " +

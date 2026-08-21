@@ -8,7 +8,8 @@ const PREF_KEYS = {
   lastChannel: "gugaramtv_last_channel",
   selectedCategory: "gugaramtv_selected_category",
   sortMode: "gugaramtv_sort_mode",
-  settings: "gugaramtv_settings"
+  settings: "gugaramtv_settings",
+  subtitleLang: "gugaramtv_subtitle_lang"
 };
 function prefGet(key, fallback){
   try{
@@ -34,7 +35,8 @@ const state = {
   currentCategory: prefGet(PREF_KEYS.selectedCategory, "TODOS"),
   searchTerm: "",
   sortMode: prefGet(PREF_KEYS.sortMode, "original"),
-  settings: Object.assign({}, DEFAULT_SETTINGS, prefGet(PREF_KEYS.settings, {}))
+  settings: Object.assign({}, DEFAULT_SETTINGS, prefGet(PREF_KEYS.settings, {})),
+  subtitles: { available: [], activeIndex: -1, preferredLang: prefGet(PREF_KEYS.subtitleLang, null) }
 };
 
 /* ============================================================
@@ -114,19 +116,112 @@ function playChannel(channel){
     hls.attachMedia(videoEl);
     hls.on(Hls.Events.MANIFEST_PARSED, onReady);
     hls.on(Hls.Events.ERROR, function(evt, data){ if(data && data.fatal) onFail(); });
+    hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, function(){ refreshSubtitleTracks(); });
   } else {
     videoEl.src = url;
     videoEl.addEventListener("loadedmetadata", onReady, { once:true });
     videoEl.addEventListener("error", onFail, { once:true });
+    videoEl.addEventListener("loadedmetadata", function(){ refreshSubtitleTracks(); }, { once:true });
     videoEl.load();
   }
 
   state.currentChannel = channel;
+  state.subtitles = { available: [], activeIndex: -1, preferredLang: state.subtitles.preferredLang };
+  renderSubtitleUI();
   prefSet(PREF_KEYS.lastChannel, channel.id);
   renderNowPlaying();
   renderChannelList();
   document.getElementById("statCurrent").textContent = truncate(channel.name, 14);
 }
+
+/* ============================================================
+   5b. LEGENDAS (faixas nativas do stream, quando existirem)
+   ============================================================ */
+function refreshSubtitleTracks(){
+  let tracks = [];
+
+  if(hls && hls.subtitleTracks && hls.subtitleTracks.length){
+    tracks = hls.subtitleTracks.map(function(t, i){
+      return { index: i, label: t.name || t.lang || ("Faixa " + (i+1)), lang: t.lang || "" };
+    });
+  } else if(videoEl.textTracks && videoEl.textTracks.length){
+    Array.prototype.forEach.call(videoEl.textTracks, function(t, i){
+      if(t.kind === "subtitles" || t.kind === "captions"){
+        t.mode = "disabled"; // controlamos manualmente, sem exibir por padrão
+        tracks.push({ index: i, label: t.label || t.language || ("Faixa " + (i+1)), lang: t.language || "" });
+      }
+    });
+  }
+
+  state.subtitles.available = tracks;
+
+  // tenta reaplicar o idioma preferido do usuário neste novo canal
+  let autoIndex = -1;
+  if(state.subtitles.preferredLang && tracks.length){
+    const match = tracks.find(function(t){ return t.lang === state.subtitles.preferredLang; });
+    if(match) autoIndex = match.index;
+  }
+  setSubtitleTrack(autoIndex, { persist:false });
+  renderSubtitleUI();
+}
+
+function setSubtitleTrack(index, opts){
+  opts = opts || {};
+  if(hls && hls.subtitleTracks && hls.subtitleTracks.length){
+    hls.subtitleTrack = index; // -1 desliga
+  } else if(videoEl.textTracks && videoEl.textTracks.length){
+    Array.prototype.forEach.call(videoEl.textTracks, function(t, i){
+      if(t.kind === "subtitles" || t.kind === "captions"){
+        t.mode = (i === index) ? "showing" : "disabled";
+      }
+    });
+  }
+
+  state.subtitles.activeIndex = index;
+  if(opts.persist !== false){
+    const chosen = state.subtitles.available.find(function(t){ return t.index === index; });
+    state.subtitles.preferredLang = chosen ? chosen.lang : null;
+    prefSet(PREF_KEYS.subtitleLang, state.subtitles.preferredLang);
+  }
+  renderSubtitleUI();
+}
+
+function renderSubtitleUI(){
+  const btn = document.getElementById("ccBtn");
+  const menu = document.getElementById("ccMenu");
+  const tracks = state.subtitles.available;
+
+  if(!tracks.length){
+    btn.style.display = "none";
+    menu.classList.remove("open");
+    return;
+  }
+
+  btn.style.display = "inline-block";
+  btn.classList.toggle("active", state.subtitles.activeIndex !== -1);
+
+  const offBtn = '<button data-idx="-1" class="' + (state.subtitles.activeIndex === -1 ? "selected" : "") + '">Desligado</button>';
+  const trackBtns = tracks.map(function(t){
+    const sel = t.index === state.subtitles.activeIndex ? "selected" : "";
+    return '<button data-idx="' + t.index + '" class="' + sel + '">' + escapeHtml(t.label) + '</button>';
+  }).join("");
+  menu.innerHTML = offBtn + trackBtns;
+
+  Array.prototype.forEach.call(menu.querySelectorAll("button"), function(b){
+    b.addEventListener("click", function(){
+      setSubtitleTrack(parseInt(b.getAttribute("data-idx"), 10));
+      menu.classList.remove("open");
+    });
+  });
+}
+
+document.getElementById("ccBtn").addEventListener("click", function(e){
+  e.stopPropagation();
+  document.getElementById("ccMenu").classList.toggle("open");
+});
+document.addEventListener("click", function(){
+  document.getElementById("ccMenu").classList.remove("open");
+});
 
 /* ============================================================
    6. RENDER HELPERS

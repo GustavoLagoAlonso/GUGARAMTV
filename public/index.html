@@ -65,7 +65,13 @@
             <h2 id="npName">Nenhum canal selecionado</h2>
             <div class="grp"><span id="npGroup">—</span> <span class="live-tag" id="liveTag">● AO VIVO</span></div>
           </div>
-          <button class="fav-toggle" id="npFav" disabled>☆ Favoritar</button>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div class="cc-wrap">
+              <button class="fav-toggle" id="ccBtn" style="display:none;" aria-haspopup="true" aria-expanded="false">CC</button>
+              <div class="cc-menu" id="ccMenu"></div>
+            </div>
+            <button class="fav-toggle" id="npFav" disabled>☆ Favoritar</button>
+          </div>
         </div>
       </section>
     </div>

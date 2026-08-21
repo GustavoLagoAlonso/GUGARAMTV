@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node server/server.js",
     "dev": "node --watch server/server.js",
-    "seed": "node server/scripts/seed-user.js"
+    "seed": "node server/scripts/seed-user.js",
+    "update-playlist": "node server/scripts/update-playlist.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

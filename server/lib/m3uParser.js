@@ -93,4 +93,25 @@ function parseM3U(text) {
   return channels;
 }
 
-module.exports = { parseM3U };
+/**
+ * Serializa uma lista de canais normalizados de volta para texto M3U,
+ * preservando tvg-id/tvg-name/tvg-logo/group-title quando existirem.
+ * @param {Array} channels
+ * @returns {string}
+ */
+function serializeM3U(channels) {
+  const lines = ["#EXTM3U"];
+  channels.forEach((c) => {
+    const attrs = [];
+    if (c.tvgId) attrs.push('tvg-id="' + c.tvgId.replace(/"/g, "'") + '"');
+    if (c.tvgName) attrs.push('tvg-name="' + c.tvgName.replace(/"/g, "'") + '"');
+    if (c.logo) attrs.push('tvg-logo="' + c.logo.replace(/"/g, "'") + '"');
+    if (c.group) attrs.push('group-title="' + c.group.replace(/"/g, "'") + '"');
+    const attrsStr = attrs.length ? " " + attrs.join(" ") : "";
+    lines.push("#EXTINF:-1" + attrsStr + "," + c.name);
+    lines.push(c.url);
+  });
+  return lines.join("\n") + "\n";
+}
+
+module.exports = { parseM3U, serializeM3U };

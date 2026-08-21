@@ -38,7 +38,7 @@ async function handlePlaylistRequest(req, res, forceRefresh) {
 // GET /api/playlist — exige sessão autenticada
 router.get("/", requireAuth, (req, res) => handlePlaylistRequest(req, res, false));
 
-// GET /api/playlist/refresh — força nova busca na origem, ignorando o cache
+// GET /api/playlist/refresh — relê server/data/playlist.m3u do disco, ignorando o cache em memória
 router.get("/refresh", requireAuth, (req, res) => handlePlaylistRequest(req, res, true));
 
 module.exports = router;

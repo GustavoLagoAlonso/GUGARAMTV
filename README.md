@@ -1,13 +1,9 @@
 # GUGARAM TV Free
 
-IPTV player com **login** e **playlist privada no backend**. Esta é a versão 2
-do projeto: a URL M3U/M3U8 nunca trafega para o navegador — ela vive
-exclusivamente em uma variável de ambiente do servidor.
-
-> Isso muda a natureza do projeto: a v1 era 100% estática e podia rodar
-> direto de um pendrive. Esta v2 **exige um pequeno servidor Node.js
-> rodando** (local, em VPS, ou em qualquer host com Node 18+), porque
-> esconder a URL de verdade só é possível se ela nunca chegar ao frontend.
+IPTV player com **login** e **playlist versionada no repositório**. A lista
+de canais não é mais buscada ao vivo a cada requisição: ela é um arquivo
+`server/data/playlist.m3u`, atualizado por um script que testa cada canal e
+remove os que estão fora do ar, revisado e commitado por você.
 
 ## Arquitetura
 
@@ -17,15 +13,20 @@ Navegador (login.html / index.html)
         ▼
 Backend Express (server/)
   ├─ Auth (login, logout, troca de senha)
-  ├─ Playlist Service (busca IPTV_PLAYLIST_URL, faz cache, devolve canais)
+  ├─ Playlist Service → lê server/data/playlist.m3u (arquivo local)
   ├─ Favorites Service (por usuário)
         │
-        ├─ server/data/db.json   (usuários + favoritos)
-        └─ IPTV_PLAYLIST_URL     (origem privada da playlist)
+        └─ server/data/db.json   (usuários + favoritos)
+
+Fora do runtime do servidor:
+  npm run update-playlist  →  busca a origem, testa cada canal,
+                               regrava server/data/playlist.m3u
 ```
 
-A URL original da playlist só é lida em `server/lib/playlistCache.js` e nunca
-é incluída em nenhuma resposta JSON, HTML ou JS enviada ao navegador.
+O servidor publicado **não faz nenhuma requisição de rede externa** para
+servir os canais — ele só lê o arquivo local. Isso deixa o serviço mais
+rápido, mais previsível (não trava se a origem cair) e sem exigir
+`IPTV_PLAYLIST_URL` configurada em produção.
 
 ## Estrutura de arquivos
 
@@ -35,20 +36,19 @@ gugaram-tv/
 ├── .env.example
 ├── .gitignore
 ├── server/
-│   ├── server.js              # bootstrap do Express, sessões, rotas
+│   ├── server.js
 │   ├── lib/
-│   │   ├── m3uParser.js       # parser M3U (server-side)
-│   │   ├── playlistCache.js   # único módulo que lê IPTV_PLAYLIST_URL
-│   │   └── store.js           # persistência em JSON (usuários/favoritos)
-│   ├── middleware/
-│   │   └── requireAuth.js
-│   ├── routes/
-│   │   ├── auth.js            # /api/auth/*
-│   │   ├── playlist.js        # /api/playlist
-│   │   └── favorites.js       # /api/favorites
+│   │   ├── m3uParser.js       # parseM3U() + serializeM3U()
+│   │   ├── playlistCache.js   # lê server/data/playlist.m3u (cache em memória)
+│   │   └── store.js           # usuários/favoritos (JSON)
+│   ├── middleware/requireAuth.js
+│   ├── routes/{auth,playlist,favorites}.js
 │   ├── scripts/
-│   │   └── seed-user.js       # cria o primeiro usuário
-│   └── data/                  # db.json é criado aqui (gitignored)
+│   │   ├── seed-user.js
+│   │   └── update-playlist.js # busca + testa + regrava a playlist
+│   └── data/
+│       ├── playlist.m3u       # VERSIONADO no git — a lista de canais
+│       └── db.json            # gerado em runtime (gitignored)
 └── public/
     ├── login.html
     ├── index.html
@@ -63,16 +63,18 @@ npm install
 cp .env.example .env
 ```
 
-Edite o `.env` e preencha:
+Edite o `.env` e preencha pelo menos:
 
 ```
 SESSION_SECRET=<gere com: openssl rand -hex 32>
-IPTV_PLAYLIST_URL=<sua URL M3U/M3U8 privada>
 ADMIN_EMAIL=voce@exemplo.com
 ADMIN_PASSWORD=<uma senha forte>
 ```
 
-Crie o primeiro usuário (lê `ADMIN_EMAIL`/`ADMIN_PASSWORD` do `.env`):
+`IPTV_PLAYLIST_URL` é opcional — só é usada pelo script de atualização da
+playlist, não pelo servidor.
+
+Crie o primeiro usuário:
 
 ```bash
 npm run seed
@@ -84,26 +86,66 @@ Suba o servidor:
 npm start
 ```
 
-Acesse `http://localhost:3000` — você será redirecionado para
-`/login.html`. Após autenticar, a playlist é carregada automaticamente e
-você cai direto no player, sem nunca ver ou informar a URL da lista.
+Acesse `http://localhost:3000` — login, playlist carregada automaticamente
+a partir de `server/data/playlist.m3u`.
+
+## Atualizando a lista de canais
+
+A lista **não se atualiza sozinha em produção**. Para atualizar:
+
+```bash
+npm run update-playlist
+```
+
+O que o script faz:
+1. Baixa a playlist de origem (padrão: lista pública da iptv-org, ou
+   `IPTV_PLAYLIST_URL`/`--source <url>` se você quiser outra).
+2. Faz uma requisição real para **cada canal** (HEAD, com fallback para GET
+   parcial), em paralelo com limite de concorrência, para checar se
+   responde.
+3. Regrava `server/data/playlist.m3u` só com os canais que responderam.
+4. Imprime um resumo: quantos ficaram, quantos foram removidos, categorias
+   antes/depois.
+
+Para a lista completa da iptv-org (12 mil+ canais), isso costuma levar de
+alguns minutos a meia hora, dependendo da sua conexão — a maior parte do
+tempo é gasta esperando timeout dos canais que já estão fora do ar.
+
+Parâmetros opcionais:
+
+```bash
+node server/scripts/update-playlist.js --source <url> --concurrency 60 --timeout 8000 --output server/data/playlist.m3u
+```
+
+Depois de rodar, revise o diff e publique:
+
+```bash
+git add server/data/playlist.m3u
+git commit -m "chore: atualizar playlist de canais"
+git push
+```
+
+Como o autodeploy está ligado no Render, o push já dispara um novo deploy
+com a lista atualizada. Recomendo rodar isso periodicamente (semanalmente,
+por exemplo) para manter a lista limpa.
 
 ## Como funciona a ocultação da URL
 
-- **Nunca aparece no frontend**: `login.html`, `index.html`, `css/styles.css`
-  e `js/app.js` não contêm nenhuma referência à URL da playlist — ela não
-  existe nesses arquivos porque o frontend só conhece endpoints como
-  `/api/playlist`, nunca a origem real dos dados.
+- **Em produção, a URL de origem nem existe mais no processo do servidor**
+  — só o arquivo já processado (`server/data/playlist.m3u`) é lido. Isso é
+  ainda mais forte do que só "esconder" a URL: ela simplesmente não é
+  necessária para o serviço rodar.
+- `IPTV_PLAYLIST_URL` só é usada localmente, por você, ao rodar
+  `npm run update-playlist` no seu computador — nunca precisa estar
+  configurada no ambiente do Render.
+- **Nunca aparece no frontend**: `login.html`, `index.html`,
+  `css/styles.css` e `js/app.js` não contêm nenhuma URL de origem — o
+  frontend só conhece `/api/playlist`.
 - **Nunca aparece em `localStorage`/`sessionStorage`/cookies**: o que fica
-  salvo no navegador são apenas preferências de interface (autoplay, mostrar
-  logos, ordenação) e o *id* do último canal assistido — nunca uma URL.
-- **Nunca é devolvida pela API**: `GET /api/playlist` monta a resposta campo
-  a campo (`id`, `name`, `logo`, `group`, `url` do stream individual),
-  então mesmo que algo mude no backend no futuro, a URL de origem da
-  playlist não pode "vazar" por acidente nesse endpoint.
-- **Erros não revelam detalhes técnicos**: falhas de rede, formato inválido
-  ou configuração ausente sempre retornam a mesma mensagem genérica ao
-  usuário; o erro real vai só para o `console.error` do servidor.
+  salvo no navegador são preferências de interface e o *id* do último canal
+  — nunca uma URL de origem.
+- **Erros não revelam detalhes técnicos**: o `console.error` do servidor
+  recebe os detalhes; o usuário só vê uma mensagem genérica.
 
 ## Sobre as URLs de stream individuais
 

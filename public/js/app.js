@@ -271,6 +271,8 @@ function getFilteredChannels(){
 
   if(state.currentTab === "favorites"){
     list = list.filter(function(c){ return isFavorite(c.id); });
+  } else if(state.currentTab === "brazil"){
+    list = list.filter(function(c){ return c.country === "BR"; });
   } else if(state.currentCategory && state.currentCategory !== "TODOS"){
     list = list.filter(function(c){ return c.group === state.currentCategory; });
   }
@@ -306,6 +308,8 @@ function renderChannelList(){
   if(items.length === 0){
     listEl.innerHTML = state.currentTab === "favorites"
       ? '<div class="empty-note">Você ainda não possui canais favoritos.<br>Clique na estrela de um canal para adicioná-lo aos favoritos.</div>'
+      : state.currentTab === "brazil"
+      ? '<div class="empty-note">Nenhum canal brasileiro disponível no momento.</div>'
       : '<div class="empty-note">Nenhum canal encontrado para esta busca/categoria.</div>';
     return;
   }
@@ -321,7 +325,7 @@ function renderChannelList(){
 
     row.innerHTML =
       '<div class="ch-logo">' + logoHtml + '</div>' +
-      '<div class="ch-info"><div class="nm">' + escapeHtml(c.name) + '</div><div class="gp">' + escapeHtml(c.group) + '</div></div>' +
+      '<div class="ch-info"><div class="nm">' + escapeHtml(c.name) + '</div><div class="gp">' + escapeHtml(c.group) + (c.country ? " · " + escapeHtml(c.country) : "") + '</div></div>' +
       '<button class="ch-star ' + (isFavorite(c.id) ? "active" : "") + '" aria-label="Favoritar ' + escapeHtml(c.name) + '">' + (isFavorite(c.id) ? "★" : "☆") + '</button>';
 
     row.addEventListener("click", function(e){

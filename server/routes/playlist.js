@@ -6,6 +6,15 @@ const { getPlaylist } = require("../lib/playlistCache");
 
 const router = express.Router();
 
+// A convenção do iptv-org codifica o país no próprio tvg-id, no formato
+// "NomeDoCanal.xx@qualidade" (ex.: "Band.br@SD"). Extraímos só o código
+// de duas letras — nunca expomos o tvg-id completo na resposta.
+function extractCountryCode(tvgId) {
+  if (!tvgId) return null;
+  const m = /\.([a-z]{2})@/i.exec(tvgId);
+  return m ? m[1].toUpperCase() : null;
+}
+
 async function handlePlaylistRequest(req, res, forceRefresh) {
   try {
     const { channels } = await getPlaylist(forceRefresh);
@@ -18,6 +27,7 @@ async function handlePlaylistRequest(req, res, forceRefresh) {
       name: c.name,
       logo: c.logo,
       group: c.group,
+      country: extractCountryCode(c.tvgId),
       url: c.url, // URL do stream individual — ver README sobre este trade-off
     }));
 

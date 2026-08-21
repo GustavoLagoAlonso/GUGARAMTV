@@ -210,3 +210,5 @@ Este projeto não distribui, hospeda nem indica listas de canais pagos ou
 protegidos. Quem administra o backend é responsável por configurar
 `IPTV_PLAYLIST_URL` apenas com uma lista de transmissão para a qual possua
 autorização de acesso.
+
+<!-- teste de autodeploy -->

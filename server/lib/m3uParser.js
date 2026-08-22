@@ -50,6 +50,7 @@ function parseM3U(text) {
         tvgName: attrs["tvg-name"] || "",
         logo: attrs["tvg-logo"] || "",
         group: attrs["group-title"] || "Sem categoria",
+        country: attrs["tvg-country"] || "",
         name: (namePart || attrs["tvg-name"] || "Canal sem nome").trim(),
       };
     } else if (line.startsWith("#")) {
@@ -83,6 +84,7 @@ function parseM3U(text) {
         tvgId: pending.tvgId,
         logo: pending.logo,
         group: pending.group,
+        country: pending.country || "",
         url,
         originalIndex: originalIndex++,
       });
@@ -107,6 +109,7 @@ function serializeM3U(channels) {
     if (c.tvgName) attrs.push('tvg-name="' + c.tvgName.replace(/"/g, "'") + '"');
     if (c.logo) attrs.push('tvg-logo="' + c.logo.replace(/"/g, "'") + '"');
     if (c.group) attrs.push('group-title="' + c.group.replace(/"/g, "'") + '"');
+    if (c.country) attrs.push('tvg-country="' + c.country.replace(/"/g, "'") + '"');
     const attrsStr = attrs.length ? " " + attrs.join(" ") : "";
     lines.push("#EXTINF:-1" + attrsStr + "," + c.name);
     lines.push(c.url);

@@ -30,6 +30,15 @@ const DEFAULT_OUTPUT = path.join(__dirname, "..", "data", "playlist.m3u");
 const DEFAULT_CONCURRENCY = 50;
 const DEFAULT_TIMEOUT_MS = 8000;
 
+// A lista geral não marca de forma confiável canais com conteúdo
+// brasileiro hospedados fora do Brasil (ex.: feeds da Pluto TV, "XYZ
+// Latin America Brazil"). A iptv-org mantém listas oficiais por país
+// que já resolvem isso corretamente — usamos como fonte de verdade
+// para o campo tvg-country que nós mesmos gravamos no arquivo final.
+const COUNTRY_LISTS = {
+  BR: "https://iptv-org.github.io/iptv/countries/br.m3u",
+};
+
 function parseArgs(argv) {
   const args = { source: null, output: DEFAULT_OUTPUT, concurrency: DEFAULT_CONCURRENCY, timeout: DEFAULT_TIMEOUT_MS };
   for (let i = 0; i < argv.length; i++) {
@@ -47,6 +56,28 @@ async function fetchText(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error("Falha HTTP " + res.status + " ao buscar " + url);
   return res.text();
+}
+
+/**
+ * Baixa cada lista oficial por país configurada em COUNTRY_LISTS e monta
+ * um mapa id do canal -> código do país (ex.: "BobEsponjaCalcaQuadrada.us@BR" -> "BR").
+ * Se alguma lista falhar ao baixar, avisa e segue sem ela (não é crítico).
+ */
+async function buildCountryMap() {
+  const map = {};
+  for (const [code, url] of Object.entries(COUNTRY_LISTS)) {
+    try {
+      const text = await fetchText(url);
+      const channels = parseM3U(text);
+      channels.forEach((c) => {
+        map[c.id] = code;
+      });
+      console.log("País " + code + ": " + channels.length + " canais na lista oficial da iptv-org.");
+    } catch (e) {
+      console.warn("Aviso: não foi possível baixar a lista oficial de " + code + " (" + e.message + "). Seguindo sem ela.");
+    }
+  }
+  return map;
 }
 
 /**
@@ -118,6 +149,18 @@ async function main() {
   console.log("Total de canais na origem: " + channels.length);
   console.log("");
 
+  console.log("Baixando listas oficiais por país (para marcar corretamente canais como brasileiros, etc.)...");
+  const countryMap = await buildCountryMap();
+  let taggedCount = 0;
+  channels.forEach((c) => {
+    if (countryMap[c.id]) {
+      c.country = countryMap[c.id];
+      taggedCount++;
+    }
+  });
+  console.log("Canais marcados por país: " + taggedCount);
+  console.log("");
+
   console.log("Testando disponibilidade de cada canal (isso pode demorar)...");
   const aliveFlags = await runPool(channels, args.concurrency, (c) => isChannelAlive(c.url, args.timeout));
 
@@ -129,12 +172,14 @@ async function main() {
 
   const categoriesBefore = new Set(channels.map((c) => c.group)).size;
   const categoriesAfter = new Set(alive.map((c) => c.group)).size;
+  const brAliveCount = alive.filter((c) => c.country === "BR").length;
   const durationSec = Math.round((Date.now() - startedAt) / 1000);
 
   console.log("");
   console.log("✓ Playlist atualizada em " + args.output);
   console.log("  Canais online:  " + alive.length);
   console.log("  Canais removidos (fora do ar): " + offlineCount);
+  console.log("  Canais brasileiros online: " + brAliveCount);
   console.log("  Categorias: " + categoriesBefore + " → " + categoriesAfter);
   console.log("  Tempo total: " + durationSec + "s");
   console.log("");
